@@ -1,0 +1,1 @@
+console.log("Hello World! (from pdf-smmrzr-claude-pdf-summarizer block)");

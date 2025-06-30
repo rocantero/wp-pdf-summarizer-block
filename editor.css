@@ -1,0 +1,25 @@
+
+.pdf-summarizer-editor {
+    border: 2px dashed #ddd;
+    padding: 20px;
+    text-align: center;
+    border-radius: 8px;
+}
+
+.upload-area input[type='file'] {
+    margin: 10px 0;
+}
+
+.pdf-block-preview {
+    text-align: left;
+}
+
+.pdf-info {
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.summary-preview {
+    margin-top: 15px;
+}

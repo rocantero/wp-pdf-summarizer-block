@@ -1,0 +1,50 @@
+
+.pdf-summarizer-block {
+    margin: 20px 0;
+    padding: 20px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background: #fafafa;
+}
+
+.pdf-download {
+    margin-bottom: 15px;
+}
+
+.pdf-link {
+    display: inline-block;
+    padding: 10px 15px;
+    background: #0073aa;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    font-weight: bold;
+}
+
+.pdf-link:hover {
+    background: #005a87;
+    color: white;
+}
+
+.pdf-summary {
+    margin-top: 15px;
+}
+
+.summary-title {
+    margin: 0 0 10px 0;
+    color: #333;
+}
+
+.summary-content {
+    line-height: 1.6;
+    color: #555;
+}
+
+.pdf-summarizer-placeholder {
+    padding: 20px;
+    text-align: center;
+    color: #666;
+    font-style: italic;
+    border: 1px dashed #ccc;
+    border-radius: 4px;
+}

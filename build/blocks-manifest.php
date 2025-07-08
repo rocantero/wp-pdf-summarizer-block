@@ -6,7 +6,7 @@ return array(
 		'apiVersion' => 3,
 		'name' => 'pdf-smmrzr/claude-pdf-summarizer',
 		'version' => '0.1.0',
-		'title' => 'Claude PDF Summarizer Block',
+		'title' => 'Resumen de PDF con AI',
 		'category' => 'media',
 		'icon' => 'smiley',
 		'description' => 'Upload a PDF document and generate a summary to put alongside it',

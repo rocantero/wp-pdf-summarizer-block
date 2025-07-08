@@ -2,7 +2,7 @@
 /**
  * Plugin Name: PDF Summarizer Block
  * Description: Gutenberg block for uploading PDFs and generating AI summaries with Claude
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: Your Name
  */
 
@@ -11,6 +11,12 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Include Composer autoloader if it exists
+if (file_exists(plugin_dir_path(__FILE__) . 'vendor/autoload.php')) {
+  require_once plugin_dir_path(__FILE__) . 'vendor/autoload.php';
+}
+
+
 class PDFSummarizerBlock {
     
     public function __construct() {
@@ -18,6 +24,7 @@ class PDFSummarizerBlock {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('wp_ajax_summarize_pdf_block', array($this, 'ajax_summarize_pdf'));
         add_action('wp_ajax_nopriv_summarize_pdf_block', array($this, 'ajax_summarize_pdf'));
+        add_action('admin_notices', array($this, 'check_dependencies'));
     }
     
     public function init() {
@@ -47,6 +54,14 @@ class PDFSummarizerBlock {
                 'summaryTitle' => array(
                     'type' => 'string',
                     'default' => 'Document Summary'
+                ),
+                'extractedText' => array(
+                    'type' => 'string',
+                    'default' => ''
+                ),
+                'wordCount' => array(
+                    'type' => 'number',
+                    'default' => 0
                 )
             )
         ));
@@ -56,19 +71,28 @@ class PDFSummarizerBlock {
         add_action('wp_enqueue_scripts', array($this, 'enqueue_block_assets'));
     }
     
+    public function check_dependencies() {
+        if (!class_exists('Smalot\PdfParser\Parser')) {
+            echo '<div class="notice notice-warning"><p>';
+            echo '<strong>Resumen de PDF con AI:</strong> For better text extraction, install the PDF Parser library by running: ';
+            echo '<code>composer require smalot/pdfparser</code> in your plugin directory.';
+            echo '</p></div>';
+        }
+    }
+    
     public function enqueue_block_editor_assets() {
         wp_enqueue_script(
             'pdf-summarizer-block-editor',
             plugin_dir_url(__FILE__) . 'block.js',
             array('wp-blocks', 'wp-element', 'wp-editor', 'wp-components', 'wp-i18n'),
-            '1.0.0'
+            '1.1.0'
         );
         
         wp_enqueue_style(
             'pdf-summarizer-block-editor-style',
             plugin_dir_url(__FILE__) . 'editor.css',
             array('wp-edit-blocks'),
-            '1.0.0'
+            '1.1.0'
         );
         
         wp_localize_script('pdf-summarizer-block-editor', 'pdfSummarizerAjax', array(
@@ -82,7 +106,7 @@ class PDFSummarizerBlock {
             'pdf-summarizer-block-style',
             plugin_dir_url(__FILE__) . 'style.css',
             array(),
-            '1.0.0'
+            '1.1.0'
         );
     }
     
@@ -91,10 +115,11 @@ class PDFSummarizerBlock {
         $summary = $attributes['summary'] ?? '';
         $file_name = $attributes['fileName'] ?? '';
         $show_summary = $attributes['showSummary'] ?? true;
-        $summary_title = $attributes['summaryTitle'] ?? 'Document Summary';
+        $summary_title = $attributes['summaryTitle'] ?? 'Resumen';
+        $word_count = $attributes['wordCount'] ?? 0;
         
         if (empty($pdf_url) && empty($summary)) {
-            return '<div class="pdf-summarizer-placeholder">PDF Summarizer Block - Configure in editor</div>';
+            return '<div class="pdf-summarizer-placeholder">Resumen de PDF</div>';
         }
         
         ob_start();
@@ -105,6 +130,9 @@ class PDFSummarizerBlock {
                     <a href="<?php echo esc_url($pdf_url); ?>" target="_blank" class="pdf-link">
                         📄 <?php echo esc_html($file_name ?: 'Download PDF'); ?>
                     </a>
+                    <?php if ($word_count > 0): ?>
+                        <span class="word-count">(<?php echo number_format($word_count); ?> words extracted)</span>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
             
@@ -123,8 +151,8 @@ class PDFSummarizerBlock {
     
     public function add_admin_menu() {
         add_options_page(
-            'PDF Summarizer Settings',
-            'PDF Summarizer',
+            'Configuraciones de Resumen de PDF con AI',
+            'Resumen de PDF con AI',
             'manage_options',
             'pdf-summarizer-settings',
             array($this, 'settings_page')
@@ -135,14 +163,18 @@ class PDFSummarizerBlock {
         if (isset($_POST['submit'])) {
             update_option('pdf_summarizer_api_key', sanitize_text_field($_POST['api_key']));
             update_option('pdf_summarizer_prompt', wp_kses_post($_POST['custom_prompt']));
+            update_option('pdf_summarizer_max_tokens', intval($_POST['max_tokens']));
+            update_option('pdf_summarizer_text_limit', intval($_POST['text_limit']));
             echo '<div class="notice notice-success"><p>Settings saved!</p></div>';
         }
         
         $api_key = get_option('pdf_summarizer_api_key', '');
-        $custom_prompt = get_option('pdf_summarizer_prompt', 'Please provide a concise summary of this PDF document, highlighting the key points and main conclusions.');
+        $custom_prompt = get_option('pdf_summarizer_prompt', 'Genera un resumen de este documento PDF, destacando los puntos clave y las conclusiones principales, sin incluir información irrelevante o redundante.');
+        $max_tokens = get_option('pdf_summarizer_max_tokens', 1500);
+        $text_limit = get_option('pdf_summarizer_text_limit', 15000);
         ?>
         <div class="wrap">
-            <h1>PDF Summarizer Settings</h1>
+            <h1>Configuraciones de Resumen de PDF con AI</h1>
             <form method="post" action="">
                 <table class="form-table">
                     <tr>
@@ -153,15 +185,37 @@ class PDFSummarizerBlock {
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row">Default Summarization Prompt</th>
+                        <th scope="row">Prompt por defecto</th>
                         <td>
                             <textarea name="custom_prompt" rows="5" cols="50" class="large-text"><?php echo esc_textarea($custom_prompt); ?></textarea>
-                            <p class="description">Default prompt for PDF summarization (can be customized per block)</p>
+                            <p class="description">Instrucciones que se le darán a la IA sobre como resumir los documentos</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Máxima cantidad de tokens a utilizar</th>
+                        <td>
+                            <input type="number" name="max_tokens" value="<?php echo esc_attr($max_tokens); ?>" min="100" max="4000" />
+                            <p class="description">Maximum tokens for Claude response (100-4000)</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Límite de extracción de texto</th>
+                        <td>
+                            <input type="number" name="text_limit" value="<?php echo esc_attr($text_limit); ?>" min="1000" max="50000" />
+                            <p class="description">Maximum characters to extract from PDF (1000-50000)</p>
                         </td>
                     </tr>
                 </table>
                 <?php submit_button(); ?>
             </form>
+            
+            <h2>Text Extraction Methods</h2>
+            <p>This plugin uses multiple methods to extract text from PDFs:</p>
+            <ul>
+                <li><strong>PDF Parser Library:</strong> <?php echo class_exists('Smalot\PdfParser\Parser') ? '✅ Available' : '❌ Not installed'; ?></li>
+                <li><strong>pdftotext (shell):</strong> <?php echo $this->check_pdftotext() ? '✅ Available' : '❌ Not available'; ?></li>
+                <li><strong>Basic extraction:</strong> ✅ Always available (fallback)</li>
+            </ul>
         </div>
         <?php
     }
@@ -182,11 +236,26 @@ class PDFSummarizerBlock {
             wp_send_json_error($uploaded_file['error']);
         }
         
+        // Extract text from PDF
+        $extracted_text = $this->extract_pdf_text($uploaded_file['file']);
+        if (!$extracted_text) {
+            wp_send_json_error('Failed to extract text from PDF. The PDF might be image-based or corrupted.');
+        }
+        
+        // Get word count
+        $word_count = str_word_count($extracted_text);
+        
+        // Limit text length for API
+        $text_limit = get_option('pdf_summarizer_text_limit', 15000);
+        if (strlen($extracted_text) > $text_limit) {
+            $extracted_text = substr($extracted_text, 0, $text_limit) . '...';
+        }
+        
         // Get custom prompt if provided
         $custom_prompt = isset($_POST['custom_prompt']) ? sanitize_textarea_field($_POST['custom_prompt']) : '';
         
-        // Send PDF to Claude for summarization
-        $summary = $this->get_claude_summary_from_pdf($uploaded_file['file'], $custom_prompt);
+        // Send text to Claude for summarization
+        $summary = $this->get_claude_summary_from_text($extracted_text, $custom_prompt);
         if (!$summary) {
             wp_send_json_error('Failed to generate summary. Please check your API key and try again.');
         }
@@ -194,48 +263,117 @@ class PDFSummarizerBlock {
         wp_send_json_success(array(
             'summary' => $summary,
             'pdf_url' => $uploaded_file['url'],
-            'file_name' => $_FILES['pdf_file']['name']
+            'file_name' => $_FILES['pdf_file']['name'],
+            'extracted_text' => $extracted_text,
+            'word_count' => $word_count
         ));
     }
     
-    private function get_claude_summary_from_pdf($pdf_path, $custom_prompt = '') {
+    private function extract_pdf_text($pdf_path) {
+        $text = '';
+        
+        // Method 1: Try PDF Parser library (if available)
+        if (class_exists('Smalot\PdfParser\Parser')) {
+          error_log('Using PDF Parser library for text extraction');
+            try {
+                $parser = new \Smalot\PdfParser\Parser();
+                $pdf = $parser->parseFile($pdf_path);
+                $text = $pdf->getText();
+                if (trim($text)) {
+                    return $this->clean_extracted_text($text);
+                }
+            } catch (Exception $e) {
+                error_log('PDF Parser error: ' . $e->getMessage());
+            }
+        }
+        
+        // Method 2: Try pdftotext command line tool
+        if ($this->check_pdftotext()) {
+            $temp_file = tempnam(sys_get_temp_dir(), 'pdf_text');
+            $command = sprintf('pdftotext %s %s 2>/dev/null', escapeshellarg($pdf_path), escapeshellarg($temp_file));
+            exec($command, $output, $return_code);
+            
+            if ($return_code === 0 && file_exists($temp_file)) {
+                $text = file_get_contents($temp_file);
+                unlink($temp_file);
+                if (trim($text)) {
+                    return $this->clean_extracted_text($text);
+                }
+            }
+        }
+        
+        // Method 3: Basic PDF text extraction (fallback)
+        $text = $this->basic_pdf_text_extraction($pdf_path);
+        if (trim($text)) {
+            return $this->clean_extracted_text($text);
+        }
+        
+        return false;
+    }
+    
+    private function basic_pdf_text_extraction($pdf_path) {
+        $content = file_get_contents($pdf_path);
+        if (!$content) {
+            return false;
+        }
+        
+        // Very basic PDF text extraction - looks for text between stream markers
+        $text = '';
+        if (preg_match_all('/stream\s*\n(.*?)\nendstream/s', $content, $matches)) {
+            foreach ($matches[1] as $match) {
+                // Try to extract readable text
+                $decoded = @gzuncompress($match);
+                if ($decoded === false) {
+                    $decoded = $match;
+                }
+                
+                // Extract text-like content
+                if (preg_match_all('/\((.*?)\)/', $decoded, $text_matches)) {
+                    foreach ($text_matches[1] as $text_match) {
+                        $text .= $text_match . ' ';
+                    }
+                }
+            }
+        }
+        
+        return $text;
+    }
+    
+    private function clean_extracted_text($text) {
+        // Remove excessive whitespace
+        $text = preg_replace('/\s+/', ' ', $text);
+        
+        // Remove non-printable characters except basic punctuation
+        $text = preg_replace('/[^\p{L}\p{N}\p{P}\p{Z}]/u', '', $text);
+        
+        // Trim and return
+        return trim($text);
+    }
+    
+    private function check_pdftotext() {
+        exec('which pdftotext', $output, $return_code);
+        return $return_code === 0;
+    }
+    
+    private function get_claude_summary_from_text($text, $custom_prompt = '') {
         $api_key = get_option('pdf_summarizer_api_key');
         if (!$api_key) {
             return false;
         }
         
         if (empty($custom_prompt)) {
-            $custom_prompt = get_option('pdf_summarizer_prompt', 'Please provide a concise summary of this PDF document, highlighting the key points and main conclusions.');
+            $custom_prompt = get_option('pdf_summarizer_prompt', 'Please provide a concise summary of this document, highlighting the key points and main conclusions.');
         }
         
-        // Read PDF file and encode it
-        $pdf_content = file_get_contents($pdf_path);
-        if (!$pdf_content) {
-            return false;
-        }
-        
-        $pdf_base64 = base64_encode($pdf_content);
+        $max_tokens = get_option('pdf_summarizer_max_tokens', 1500);
         
         $data = array(
-            'model' => 'claude-sonnet-4-20250514',
-            'max_tokens' => 1500,
+            'model' => 'claude-3-5-sonnet-20241022',
+            'max_tokens' => intval($max_tokens),
             'messages' => array(
                 array(
                     'role' => 'user',
-                    'content' => array(
-                        array(
-                            'type' => 'document',
-                            'source' => array(
-                                'type' => 'base64',
-                                'media_type' => 'application/pdf',
-                                'data' => $pdf_base64
-                            )
-                        ),
-                        array(
-                            'type' => 'text',
-                            'text' => $custom_prompt
-                        )
-                    )
+                    'content' => $custom_prompt . "\n\nDocument text:\n" . $text
                 )
             )
         );
@@ -290,9 +428,10 @@ add_action('init', function() {
         
         edit: function(props) {
             const { attributes, setAttributes } = props;
-            const { pdfUrl, summary, fileName, showSummary, summaryTitle } = attributes;
+            const { pdfUrl, summary, fileName, showSummary, summaryTitle, extractedText, wordCount } = attributes;
             const [isUploading, setIsUploading] = useState(false);
             const [customPrompt, setCustomPrompt] = useState('');
+            const [showExtractedText, setShowExtractedText] = useState(false);
             const blockProps = useBlockProps();
 
             const uploadPDF = function(file) {
@@ -322,7 +461,9 @@ add_action('init', function() {
                         setAttributes({
                             pdfUrl: data.data.pdf_url,
                             summary: data.data.summary,
-                            fileName: data.data.file_name
+                            fileName: data.data.file_name,
+                            extractedText: data.data.extracted_text,
+                            wordCount: data.data.word_count
                         });
                     } else {
                         alert('Error: ' + data.data);
@@ -352,6 +493,11 @@ add_action('init', function() {
                             value: customPrompt,
                             onChange: setCustomPrompt,
                             placeholder: __('Leave empty to use default prompt from settings')
+                        }),
+                        extractedText && el(ToggleControl, {
+                            label: __('Show Extracted Text'),
+                            checked: showExtractedText,
+                            onChange: setShowExtractedText
                         })
                     ])
                 ]),
@@ -359,6 +505,7 @@ add_action('init', function() {
                 el('div', { className: 'pdf-summarizer-editor', key: 'content' }, [
                     !pdfUrl && el('div', { className: 'upload-area' }, [
                         el('h3', {}, __('PDF Summarizer Block')),
+                        el('p', {}, __('Upload a PDF file to extract text and generate an AI summary.')),
                         el('input', {
                             type: 'file',
                             accept: '.pdf',
@@ -367,7 +514,7 @@ add_action('init', function() {
                         }),
                         isUploading && el('div', { style: { marginTop: '10px' } }, [
                             el(Spinner, {}),
-                            el('span', { style: { marginLeft: '10px' } }, __('Processing PDF...'))
+                            el('span', { style: { marginLeft: '10px' } }, __('Extracting text and generating summary...'))
                         ])
                     ]),
                     
@@ -375,12 +522,36 @@ add_action('init', function() {
                         el('div', { className: 'pdf-info' }, [
                             el('strong', {}, __('PDF: ')),
                             el('a', { href: pdfUrl, target: '_blank' }, fileName || __('View PDF')),
+                            wordCount > 0 && el('span', { 
+                                style: { marginLeft: '10px', color: '#666', fontSize: '0.9em' }
+                            }, '(' + wordCount.toLocaleString() + ' words extracted)'),
                             el(Button, {
                                 isSmall: true,
                                 isDestructive: true,
-                                onClick: () => setAttributes({ pdfUrl: '', summary: '', fileName: '' }),
+                                onClick: () => setAttributes({ 
+                                    pdfUrl: '', 
+                                    summary: '', 
+                                    fileName: '', 
+                                    extractedText: '', 
+                                    wordCount: 0 
+                                }),
                                 style: { marginLeft: '10px' }
                             }, __('Remove'))
+                        ]),
+                        
+                        showExtractedText && extractedText && el('div', { className: 'extracted-text-preview' }, [
+                            el('h4', {}, __('Extracted Text')),
+                            el('div', { 
+                                style: { 
+                                    background: '#fafafa', 
+                                    padding: '10px', 
+                                    borderRadius: '4px',
+                                    maxHeight: '200px',
+                                    overflow: 'auto',
+                                    fontSize: '0.9em',
+                                    whiteSpace: 'pre-wrap'
+                                } 
+                            }, extractedText.substring(0, 1000) + (extractedText.length > 1000 ? '...' : ''))
                         ]),
                         
                         showSummary && summary && el('div', { className: 'summary-preview' }, [
@@ -410,10 +581,10 @@ add_action('init', function() {
         file_put_contents(plugin_dir_path(__FILE__) . 'block.js', $block_js);
     }
     
-    // Create basic CSS files
+    // Create updated CSS files
     $editor_css = "
 .pdf-summarizer-editor {
-    border: 2px dashed #ddd;
+    border: 1px solid #ddd;
     padding: 20px;
     text-align: center;
     border-radius: 8px;
@@ -436,6 +607,16 @@ add_action('init', function() {
 .summary-preview {
     margin-top: 15px;
 }
+
+.extracted-text-preview {
+    margin-top: 15px;
+    margin-bottom: 15px;
+}
+
+.extracted-text-preview h4 {
+    margin-bottom: 8px;
+    color: #333;
+}
 ";
 
     $style_css = "
@@ -444,7 +625,7 @@ add_action('init', function() {
     padding: 20px;
     border: 1px solid #e0e0e0;
     border-radius: 8px;
-    background: #fafafa;
+    background: transparent;
 }
 
 .pdf-download {
@@ -464,6 +645,12 @@ add_action('init', function() {
 .pdf-link:hover {
     background: #005a87;
     color: white;
+}
+
+.word-count {
+    margin-left: 10px;
+    color: #666;
+    font-size: 0.9em;
 }
 
 .pdf-summary {

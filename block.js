@@ -116,8 +116,9 @@
                             el('div', { style: { marginTop: '10px' } }, [
                                 el(Button, {
                                     isPrimary: true,
+                                    style: { fontSize: '18px', padding: '10px 20px', height: '50px' },
                                     onClick: () => setIsEditingSummary(!isEditingSummary)
-                                }, isEditingSummary ? __('Editar') : __('Guardar Resumen')),
+                                }, isEditingSummary ? __('Guardar Resumen') : __('Editar')),
                             ])
                         ])
                     ])

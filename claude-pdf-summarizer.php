@@ -53,7 +53,7 @@ class PDFSummarizerBlock {
                 ),
                 'summaryTitle' => array(
                     'type' => 'string',
-                    'default' => 'Document Summary'
+                    'default' => 'Sumario Ejecutivo generado por Claude AI'
                 ),
                 'extractedText' => array(
                     'type' => 'string',
@@ -146,7 +146,7 @@ class PDFSummarizerBlock {
             
             <?php if ($show_summary && $summary): ?>
                 <div class="pdf-summary">
-                    <h3 class="summary-title"><?php echo esc_html($summary_title); ?></h3>
+                    <!-- <h3 class="summary-title"><?php echo esc_html($summary_title); ?></h3> -->
                     <div class="summary-content">
                         <?php echo wp_kses_post(wpautop($summary)); ?>
                     </div>

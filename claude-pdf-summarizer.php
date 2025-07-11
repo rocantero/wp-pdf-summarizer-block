@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: PDF Summarizer Block
+ * Plugin Name: Sumario Ejecutivo con IA
  * Description: Gutenberg block for uploading PDFs and generating AI summaries with Claude
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: Your Name
  */
 
@@ -62,6 +62,14 @@ class PDFSummarizerBlock {
                 'wordCount' => array(
                     'type' => 'number',
                     'default' => 0
+                ),
+                'isEditing' => array(
+                    'type' => 'boolean',
+                    'default' => false
+                ),
+                'tempSummary' => array(
+                    'type' => 'string',
+                    'default' => ''
                 )
             )
         ));
@@ -74,8 +82,8 @@ class PDFSummarizerBlock {
     public function check_dependencies() {
         if (!class_exists('Smalot\PdfParser\Parser')) {
             echo '<div class="notice notice-warning"><p>';
-            echo '<strong>Resumen de PDF con AI:</strong> For better text extraction, install the PDF Parser library by running: ';
-            echo '<code>composer require smalot/pdfparser</code> in your plugin directory.';
+            echo '<strong>Resumen de PDF con AI:</strong> Para el correcto funcionamiento instala la herramienta de extracción de texto: ';
+            echo '<code>composer require smalot/pdfparser</code> en el directorio del plugin.';
             echo '</p></div>';
         }
     }
@@ -85,14 +93,14 @@ class PDFSummarizerBlock {
             'pdf-summarizer-block-editor',
             plugin_dir_url(__FILE__) . 'block.js',
             array('wp-blocks', 'wp-element', 'wp-editor', 'wp-components', 'wp-i18n'),
-            '1.1.0'
+            '1.2.0'
         );
         
         wp_enqueue_style(
             'pdf-summarizer-block-editor-style',
             plugin_dir_url(__FILE__) . 'editor.css',
             array('wp-edit-blocks'),
-            '1.1.0'
+            '1.2.0'
         );
         
         wp_localize_script('pdf-summarizer-block-editor', 'pdfSummarizerAjax', array(
@@ -106,7 +114,7 @@ class PDFSummarizerBlock {
             'pdf-summarizer-block-style',
             plugin_dir_url(__FILE__) . 'style.css',
             array(),
-            '1.1.0'
+            '1.2.0'
         );
     }
     
@@ -125,7 +133,7 @@ class PDFSummarizerBlock {
         ob_start();
         ?>
         <div class="pdf-summarizer-block">
-            <?php if ($pdf_url): ?>
+            <!-- <?php if ($pdf_url): ?>
                 <div class="pdf-download">
                     <a href="<?php echo esc_url($pdf_url); ?>" target="_blank" class="pdf-link">
                         📄 <?php echo esc_html($file_name ?: 'Download PDF'); ?>
@@ -134,7 +142,7 @@ class PDFSummarizerBlock {
                         <span class="word-count">(<?php echo number_format($word_count); ?> words extracted)</span>
                     <?php endif; ?>
                 </div>
-            <?php endif; ?>
+            <?php endif; ?> -->
             
             <?php if ($show_summary && $summary): ?>
                 <div class="pdf-summary">
@@ -422,16 +430,16 @@ add_action('init', function() {
     const { __ } = wp.i18n;
 
     registerBlockType('pdf-summarizer/pdf-block', {
-        title: __('PDF Summarizer'),
+        title: __('Sumario Ejecutivo'),
         icon: 'media-document',
         category: 'media',
         
         edit: function(props) {
             const { attributes, setAttributes } = props;
-            const { pdfUrl, summary, fileName, showSummary, summaryTitle, extractedText, wordCount } = attributes;
+            const { pdfUrl, summary, fileName, showSummary, summaryTitle, extractedText, wordCount, isEditing, tempSummary } = attributes;
             const [isUploading, setIsUploading] = useState(false);
             const [customPrompt, setCustomPrompt] = useState('');
-            const [showExtractedText, setShowExtractedText] = useState(false);
+            const [showExtractedText, setShowExtractedText] = useState(true);
             const blockProps = useBlockProps();
 
             const uploadPDF = function(file) {
@@ -463,7 +471,9 @@ add_action('init', function() {
                             summary: data.data.summary,
                             fileName: data.data.file_name,
                             extractedText: data.data.extracted_text,
-                            wordCount: data.data.word_count
+                            wordCount: data.data.word_count,
+                            isEditing: true,
+                            tempSummary: data.data.summary
                         });
                     } else {
                         alert('Error: ' + data.data);
@@ -475,38 +485,36 @@ add_action('init', function() {
                 });
             };
 
+            const saveSummary = function() {
+                setAttributes({
+                    summary: tempSummary,
+                    isEditing: false
+                });
+            };
+
+            const cancelEdit = function() {
+                setAttributes({
+                    tempSummary: summary,
+                    isEditing: false
+                });
+            };
+
+            const editSummary = function() {
+                setAttributes({
+                    tempSummary: summary,
+                    isEditing: true
+                });
+            };
+
             return el('div', blockProps, [
                 el(InspectorControls, { key: 'inspector' }, [
-                    el(PanelBody, { title: __('Block Settings'), key: 'settings' }, [
-                        el(ToggleControl, {
-                            label: __('Show Summary'),
-                            checked: showSummary,
-                            onChange: (value) => setAttributes({ showSummary: value })
-                        }),
-                        el(TextControl, {
-                            label: __('Summary Title'),
-                            value: summaryTitle,
-                            onChange: (value) => setAttributes({ summaryTitle: value })
-                        }),
-                        el(TextareaControl, {
-                            label: __('Custom Prompt (optional)'),
-                            value: customPrompt,
-                            onChange: setCustomPrompt,
-                            placeholder: __('Leave empty to use default prompt from settings')
-                        }),
-                        extractedText && el(ToggleControl, {
-                            label: __('Show Extracted Text'),
-                            checked: showExtractedText,
-                            onChange: setShowExtractedText
-                        })
-                    ])
+                    el(PanelBody, { title: __('Block Settings'), key: 'settings' }, [])
                 ]),
                 
                 el('div', { className: 'pdf-summarizer-editor', key: 'content' }, [
                     !pdfUrl && el('div', { className: 'upload-area' }, [
-                        el('h3', {}, __('PDF Summarizer Block')),
-                        el('p', {}, __('Upload a PDF file to extract text and generate an AI summary.')),
-                        el('input', {
+                        el('h3', {}, __('Sumario Ejecutivo
+                        el('p', {}, __('Adjunta un archivo PDF (original, no escaneado) para extraer texto y generar un resumen con IA.')),
                             type: 'file',
                             accept: '.pdf',
                             onChange: (e) => uploadPDF(e.target.files[0]),
@@ -533,7 +541,9 @@ add_action('init', function() {
                                     summary: '', 
                                     fileName: '', 
                                     extractedText: '', 
-                                    wordCount: 0 
+                                    wordCount: 0,
+                                    isEditing: false,
+                                    tempSummary: ''
                                 }),
                                 style: { marginLeft: '10px' }
                             }, __('Remove'))
@@ -554,16 +564,54 @@ add_action('init', function() {
                             }, extractedText.substring(0, 1000) + (extractedText.length > 1000 ? '...' : ''))
                         ]),
                         
-                        showSummary && summary && el('div', { className: 'summary-preview' }, [
+                        showSummary && el('div', { className: 'summary-section' }, [
                             el('h4', {}, summaryTitle),
-                            el('div', { 
-                                style: { 
-                                    background: '#f0f0f0', 
-                                    padding: '15px', 
-                                    borderRadius: '4px',
-                                    whiteSpace: 'pre-wrap'
-                                } 
-                            }, summary)
+                            
+                            // Show textarea when editing
+                            isEditing && el('div', { className: 'summary-edit-mode' }, [
+                                el('textarea', {
+                                    value: tempSummary,
+                                    onChange: (e) => setAttributes({ tempSummary: e.target.value }),
+                                    rows: 10,
+                                    style: {
+                                        width: '100%',
+                                        padding: '10px',
+                                        borderRadius: '4px',
+                                        border: '1px solid #ddd',
+                                        fontSize: '16px',
+                                        fontFamily: 'inherit',
+                                        lineHeight: '1.5'
+                                    }
+                                }),
+                                el('div', { style: { marginTop: '10px' } }, [
+                                    el(Button, {
+                                        isPrimary: true,
+                                        onClick: saveSummary,
+                                        style: { marginRight: '10px' }
+                                    }, __('Guardar')),
+                                    el(Button, {
+                                        isSecondary: true,
+                                        onClick: cancelEdit
+                                    }, __('Cancelar'))
+                                ])
+                            ]),
+                            
+                            // Show formatted summary when not editing
+                            !isEditing && summary && el('div', { className: 'summary-display-mode' }, [
+                                el('div', { 
+                                    style: { 
+                                        background: 'transparent', 
+                                        whiteSpace: 'pre-wrap',
+                                        lineHeight: '1.6',
+                                    } 
+                                }, summary),
+                                el('div', { style: { marginTop: '10px' } }, [
+                                    el(Button, {
+                                        isSecondary: true,
+                                        onClick: editSummary
+                                    }, __('Editar'))
+                                ])
+                            ])
                         ])
                     ])
                 ])
@@ -604,8 +652,17 @@ add_action('init', function() {
     border-bottom: 1px solid #eee;
 }
 
-.summary-preview {
+.summary-section {
     margin-top: 15px;
+}
+
+.summary-edit-mode textarea {
+    resize: vertical;
+    min-height: 150px;
+}
+
+.summary-display-mode {
+    margin-top: 10px;
 }
 
 .extracted-text-preview {
@@ -617,14 +674,17 @@ add_action('init', function() {
     margin-bottom: 8px;
     color: #333;
 }
+
+.summary-section h4 {
+    margin-bottom: 10px;
+    color: #333;
+}
 ";
 
     $style_css = "
 .pdf-summarizer-block {
     margin: 20px 0;
     padding: 20px;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
     background: transparent;
 }
 
@@ -670,10 +730,6 @@ add_action('init', function() {
 .pdf-summarizer-placeholder {
     padding: 20px;
     text-align: center;
-    color: #666;
-    font-style: italic;
-    border: 1px dashed #ccc;
-    border-radius: 4px;
 }
 ";
 

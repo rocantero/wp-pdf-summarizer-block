@@ -1,7 +1,5 @@
 
 .pdf-summarizer-editor {
-    border: 2px dashed #ddd;
-    padding: 20px;
     text-align: center;
     border-radius: 8px;
 }
@@ -17,7 +15,6 @@
 .pdf-info {
     margin-bottom: 15px;
     padding-bottom: 10px;
-    border-bottom: 1px solid #eee;
 }
 
 .summary-preview {

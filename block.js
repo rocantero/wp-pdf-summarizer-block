@@ -1,4 +1,3 @@
-
 (function() {
     const { registerBlockType } = wp.blocks;
     const { createElement: el, useState, useEffect } = wp.element;
@@ -7,7 +6,7 @@
     const { __ } = wp.i18n;
 
     registerBlockType('pdf-summarizer/pdf-block', {
-        title: __('PDF Summarizer'),
+        title: __('Sumario Ejecutivo'),
         icon: 'media-document',
         category: 'media',
         
@@ -16,6 +15,7 @@
             const { pdfUrl, summary, fileName, showSummary, summaryTitle } = attributes;
             const [isUploading, setIsUploading] = useState(false);
             const [customPrompt, setCustomPrompt] = useState('');
+            const [isEditingSummary, setIsEditingSummary] = useState(true); // New state for editing summary
             const blockProps = useBlockProps();
 
             const uploadPDF = function(file) {
@@ -59,29 +59,12 @@
 
             return el('div', blockProps, [
                 el(InspectorControls, { key: 'inspector' }, [
-                    el(PanelBody, { title: __('Block Settings'), key: 'settings' }, [
-                        el(ToggleControl, {
-                            label: __('Show Summary'),
-                            checked: showSummary,
-                            onChange: (value) => setAttributes({ showSummary: value })
-                        }),
-                        el(TextControl, {
-                            label: __('Summary Title'),
-                            value: summaryTitle,
-                            onChange: (value) => setAttributes({ summaryTitle: value })
-                        }),
-                        el(TextareaControl, {
-                            label: __('Custom Prompt (optional)'),
-                            value: customPrompt,
-                            onChange: setCustomPrompt,
-                            placeholder: __('Leave empty to use default prompt from settings')
-                        })
-                    ])
+                    el(PanelBody, { title: __('Block Settings'), key: 'settings' }, [])
                 ]),
                 
                 el('div', { className: 'pdf-summarizer-editor', key: 'content' }, [
                     !pdfUrl && el('div', { className: 'upload-area' }, [
-                        el('h3', {}, __('PDF Summarizer Block')),
+                        el('h3', {}, __('Sumario Ejecutivo')),
                         el('input', {
                             type: 'file',
                             accept: '.pdf',
@@ -106,16 +89,37 @@
                             }, __('Remove'))
                         ]),
                         
-                        showSummary && summary && el('div', { className: 'summary-preview' }, [
+                        summary && el('div', { className: 'summary-preview' }, [
                             el('h4', {}, summaryTitle),
-                            el('div', { 
-                                style: { 
-                                    background: '#f0f0f0', 
-                                    padding: '15px', 
-                                    borderRadius: '4px',
-                                    whiteSpace: 'pre-wrap'
-                                } 
-                            }, summary)
+                            isEditingSummary
+                                ? el('textarea', {
+                                    value: summary,
+                                    onChange: (e) => setAttributes({ summary: e.target.value }),
+                                    rows: 20,
+                                    style: {
+                                        width: '100%',
+                                        padding: '10px',
+                                        borderRadius: '4px',
+                                        border: '1px solid #ddd',
+                                        fontSize: '16px',
+                                        fontFamily: 'inherit',
+                                        lineHeight: '1.5'
+                                    }
+                                })
+                                : el('div', {
+                                    style: {
+                                        background: 'transparent',
+                                        padding: '16px',
+                                        whiteSpace: 'pre-wrap'
+                                    }
+                                }, summary),
+                            el('div', { style: { marginTop: '10px' } }, [
+                                el(Button, {
+                                    isPrimary: true,
+                                    style: { fontSize: '18px', padding: '10px 20px', height: '50px' },
+                                    onClick: () => setIsEditingSummary(!isEditingSummary)
+                                }, isEditingSummary ? __('Guardar Resumen') : __('Editar')),
+                            ])
                         ])
                     ])
                 ])

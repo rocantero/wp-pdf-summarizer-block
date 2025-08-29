@@ -4,12 +4,12 @@ return array(
 	'claude-pdf-summarizer' => array(
 		'$schema' => 'https://schemas.wp.org/trunk/block.json',
 		'apiVersion' => 3,
-		'name' => 'pdf-smmrzr/claude-pdf-summarizer',
+		'name' => 'civilab/sumario-ejecutivo',
 		'version' => '0.1.0',
-		'title' => 'Claude PDF Summarizer Block',
+		'title' => 'Resumen Ejecutivo con IA',
 		'category' => 'media',
 		'icon' => 'smiley',
-		'description' => 'Upload a PDF document and generate a summary to put alongside it',
+		'description' => 'Block Gutenberg para subir PDFs y generar resúmenes con IA',
 		'example' => array(
 			
 		),
